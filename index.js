@@ -34,10 +34,14 @@ async function main() {
       throw new Error(`Request ${requestNumber}/${REQUEST_COUNT} failed: ${error.message}`);
     }
 
-    let body;
+    let responseBytes = 0;
 
     try {
-      body = await response.arrayBuffer();
+      if (response.body) {
+        for await (const chunk of response.body) {
+          responseBytes += chunk.byteLength;
+        }
+      }
     } catch (error) {
       throw new Error(`Could not read response ${requestNumber}/${REQUEST_COUNT}: ${error.message}`);
     }
@@ -50,7 +54,7 @@ async function main() {
       );
     }
 
-    totalBytes += body.byteLength;
+    totalBytes += responseBytes;
     totalDurationMs += durationMs;
   }
 
