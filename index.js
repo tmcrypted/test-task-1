@@ -61,7 +61,7 @@ async function main() {
   console.log(`Requests completed: ${REQUEST_COUNT}`);
   console.log(`Average request time: ${averageDurationMs.toFixed(2)} ms`);
   console.log(`Total response data: ${totalBytes} bytes (${(totalBytes / BYTES_PER_MEGABYTE).toFixed(2)} MB)`);
-  console.log(`Average download speed: ${downloadSpeedMBps.toFixed(2)} MB/s`);
+  console.log(`Average download speed: ${downloadSpeedMBps.toFixed(4)} MB/s`);
 }
 
 main().catch((error) => {
