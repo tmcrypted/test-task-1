@@ -38,6 +38,15 @@ async function startTestServer(t) {
       return;
     }
 
+    if (request.url === '/stall') {
+      response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      response.write('waiting');
+      setTimeout(() => {
+        if (!response.destroyed) response.end(' too long');
+      }, 250);
+      return;
+    }
+
     if (request.url === '/empty') {
       response.writeHead(204);
       response.end();
@@ -150,12 +159,25 @@ test('reports a connection interrupted before the response completes', async (t)
   assert.equal(stats.requests, 1);
 });
 
+test('aborts a response body that exceeds the configured timeout', async (t) => {
+  const { stats, url } = await startTestServer(t);
+  const result = await runScript(['--timeout-ms', '40', `${url}/stall`]);
+
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /Request 1\/10 timed out after 40 ms/);
+  assert.equal(result.stdout, '');
+  assert.equal(stats.requests, 1);
+});
+
 test('rejects a missing URL and unsupported protocols', async () => {
   const missingUrl = await runScript([]);
   const unsupportedProtocol = await runScript(['file:///tmp/test']);
+  const invalidTimeout = await runScript(['--timeout-ms', '0', 'https://example.com/']);
 
   assert.equal(missingUrl.code, 1);
   assert.match(missingUrl.stderr, /Usage: node index\.js/);
   assert.equal(unsupportedProtocol.code, 1);
   assert.match(unsupportedProtocol.stderr, /URL must use the http: or https: protocol/);
+  assert.equal(invalidTimeout.code, 1);
+  assert.match(invalidTimeout.stderr, /--timeout-ms must be a positive integer/);
 });

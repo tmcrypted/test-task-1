@@ -1,11 +1,23 @@
 const REQUEST_COUNT = 10;
 const BYTES_PER_MEGABYTE = 1_000_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 async function main() {
-  const input = process.argv[2];
+  const args = process.argv.slice(2);
+  let input;
+  let timeoutMs = DEFAULT_TIMEOUT_MS;
 
-  if (!input || process.argv.length !== 3) {
-    throw new Error('Usage: node index.js <http-or-https-url>');
+  if (args.length === 1) {
+    [input] = args;
+  } else if (args.length === 3 && args[0] === '--timeout-ms') {
+    timeoutMs = Number(args[1]);
+    input = args[2];
+
+    if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+      throw new Error('--timeout-ms must be a positive integer.');
+    }
+  } else {
+    throw new Error('Usage: node index.js [--timeout-ms <milliseconds>] <http-or-https-url>');
   }
 
   let target;
@@ -25,25 +37,29 @@ async function main() {
 
   for (let requestNumber = 1; requestNumber <= REQUEST_COUNT; requestNumber += 1) {
     const startedAt = performance.now();
-
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     let response;
-
-    try {
-      response = await fetch(target);
-    } catch (error) {
-      throw new Error(`Request ${requestNumber}/${REQUEST_COUNT} failed: ${error.message}`);
-    }
-
     let responseBytes = 0;
+    let phase = 'request';
 
     try {
+      response = await fetch(target, { signal: controller.signal });
+      phase = 'response body';
+
       if (response.body) {
         for await (const chunk of response.body) {
           responseBytes += chunk.byteLength;
         }
       }
     } catch (error) {
-      throw new Error(`Could not read response ${requestNumber}/${REQUEST_COUNT}: ${error.message}`);
+      if (controller.signal.aborted) {
+        throw new Error(`Request ${requestNumber}/${REQUEST_COUNT} timed out after ${timeoutMs} ms.`);
+      }
+      const description = phase === 'request' ? 'failed' : 'could not read response';
+      throw new Error(`Request ${requestNumber}/${REQUEST_COUNT} ${description}: ${error.message}`);
+    } finally {
+      clearTimeout(timeout);
     }
 
     const durationMs = performance.now() - startedAt;
