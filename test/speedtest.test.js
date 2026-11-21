@@ -29,7 +29,12 @@ async function startTestServer(t) {
     if (request.url === '/missing') {
       response.writeHead(404, 'Not Found');
       response.write('missing ');
-      setTimeout(() => response.end('body'), 20);
+      setTimeout(() => response.end('body'), 150);
+      return;
+    }
+
+    if (request.url === '/drop') {
+      response.destroy();
       return;
     }
 
@@ -134,6 +139,15 @@ test('reports non-success HTTP responses and exits with an error', async (t) => 
   assert.equal(result.stdout, '');
   assert.equal(stats.requests, 1);
   assert.equal(stats.finished, 1);
+});
+
+test('reports a connection interrupted before the response completes', async (t) => {
+  const { stats, url } = await startTestServer(t);
+  const result = await runScript([`${url}/drop`]);
+
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /Request 1\/10 failed:/);
+  assert.equal(stats.requests, 1);
 });
 
 test('rejects a missing URL and unsupported protocols', async () => {
